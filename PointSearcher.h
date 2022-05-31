@@ -2,13 +2,23 @@
 #include <vector>
 
 class PointSearcher {
-    std::vector<Line<double>> lines_;
+    double tolerance_;
     int num_points_;
-    double* x_;
+    Line<double> cur_line_;
+    std::vector<std::pair<double, double>> mass_intersection;
+    std::vector<int> intersection_hist;
+    std::vector<std::vector<int>> intrsct_idx;
+
+    std::vector<Line<double>> lines_;
+    std::pair<double, double> step_vec_;
+
+    void clean_lines(std::vector<Line<double>>& lines, int idx);
+    
     public:
-    PointSearcher(std::vector<Line<double>> l, int num_points);
-    //void set_lines(const std::vector<Line<double>> &lines, const int num_points);
-    void gen_init_pos(double x_min, double x_max, double y_min, double y_max);
-    void process();
+    PointSearcher(int num_pts);
+    void set_tolerance(double val);
+    std::vector<std::pair<double, double>> process(std::vector<Line<double>>&lines);
+    void intersect(std::vector<Line<double>>&lines, int idx);
+    void build_intersection_hist(double line_length);
 };
 

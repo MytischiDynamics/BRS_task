@@ -4,7 +4,6 @@
 #include <fstream>
 #include <string>
 #include <vector>
-#include <iostream>
 
 #include "Geometry.h"
 
@@ -21,7 +20,7 @@ class Reader {
     void process_file();
     int get_num_lines() const;
     int get_num_points() const;
-    const std::vector<Line<double>>& get_lines() const;
+    std::vector<Line<double>>& get_lines();
 };
 
 Reader::Reader(string fname)
@@ -58,7 +57,7 @@ int Reader::get_num_points() const
     return num_pts_;
 }
 
-const std::vector<Line<double>> &Reader::get_lines() const
+std::vector<Line<double>> &Reader::get_lines()
 {
     return lines_;
 }

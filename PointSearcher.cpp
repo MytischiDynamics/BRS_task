@@ -1,80 +1,88 @@
 #include "PointSearcher.h"
-#include "ceres/ceres.h"
-#include <vector>
-#include <random>
 #include "Geometry.h"
+#include <vector>
+#include <utility>
+#include <cmath>
+#include <algorithm>
+#include <iostream>
 
-using ceres::AutoDiffCostFunction;
-using ceres::CostFunction;
-using ceres::Problem;
-using ceres::Solve;
-using ceres::Solver;
+PointSearcher::PointSearcher(int num_pts)
+{
+    num_points_ = num_pts;
+    tolerance_ = 10.0;
+}
 
-struct CostFunctor {
-    CostFunctor(const std::vector<Line<double>> &l, const int num_pts) {
-        l_ = l;
-        num_pts_ = num_pts;
+//Intersect all lines in vector with line at idx
+//line[idx] will be removed from verctor
+//Result is in this->mass_intersection
+void PointSearcher::intersect(std::vector<Line<double>>&lines, int idx)
+{
+    mass_intersection.clear();
+    
+    Line cur_line = lines[idx];
+    lines.erase(lines.begin() + idx);
+
+    //Fill intersections data
+    auto it_begin = lines.begin();
+    auto it_end = lines.end();
+    for (auto it = it_begin; it != it_end; ++it) {
+        mass_intersection.push_back(it->intersect(cur_line));
     }
+}
 
-    template <typename T>
-    bool operator()(const T* const x, T* residual) const {
-        auto l_it_stop = l_.end();
-        double resid = 0.0;
-        residual[0] = 0.0 + x[0] - x[0];
-        
-        for(auto l_it = l_.begin(); l_it != l_it_stop; ++l_it) {
-            for(int pt_idx = 0; pt_idx < num_pts_; pt_idx++) {
-                //resid += l_it->calc_dist(std::make_pair(x[2 * pt_idx], x[2 * pt_idx + 1]));
-                auto signed_dist = l_it->a_*x[2 * pt_idx] + l_it->b_*x[2 * pt_idx + 1] + l_it->c_;
-                residual[0] += signed_dist * signed_dist;
-            }
+void PointSearcher::build_intersection_hist(double line_length)
+{
+    int num_bins = int(std::ceil(line_length / tolerance_));
+    intersection_hist = std::vector<int>(num_bins, 0);
+    //intrsct_idx.resize(num_bins, std::vector<int>(1));
+    intrsct_idx = std::vector<std::vector<int>>(num_bins, std::vector<int>(0));
+
+    auto intrsct_start = mass_intersection.begin();
+    auto intrsct_end = mass_intersection.end();
+
+    for (auto it = intrsct_start; it != intrsct_end; ++it) {
+        int cur_bin = int(Line(it->first, it->second, cur_line_.start_pt_.first, cur_line_.start_pt_.second).get_length() / tolerance_);
+        if ((cur_bin < num_bins) && (cur_bin >= 0)) {
+            intersection_hist[cur_bin]++;
+            intrsct_idx[cur_bin].push_back(it - intrsct_start);
         }
-        //residual[0] = std::move(resid) - x[0] + x[0];
-        return true;
     }
-
-    private:
-    std::vector<Line<double>> l_;
-    int num_pts_;
-};
-
-
-/*!TODO: add scaling ranges from -1.0 to 1.0 to exploite double type density*/
-PointSearcher::PointSearcher(std::vector<Line<double>> l, int num_points)
-{
-    lines_ = l;
-    num_points_ = num_points;
-    gen_init_pos(-1000.0, 1000.0, -1000.0, 1000.0);
 }
 
-void PointSearcher::gen_init_pos(double x_min, double x_max, double y_min, double y_max)
+void PointSearcher::clean_lines(std::vector<Line<double>>& lines, int idx)
 {
-    x_ = new double[num_points_ * 2];
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<> dis_x(x_min, x_max);
-    std::uniform_real_distribution<> dis_y(y_min, y_max);
-    for(int i = 0; i < num_points_; i++) {
-        x_[2 * i] = dis_x(gen);
-        x_[2 * i + 1] = dis_y(gen);
+    std::sort(intrsct_idx[idx].begin(), intrsct_idx[idx].end(), std::greater<int>());
+    auto ibegin = intrsct_idx[idx].begin();
+    auto iend = intrsct_idx[idx].end();
+
+    for(auto iit = ibegin; iit != iend; ++iit) {
+        //std::cout << "Removing " << *iit << std::endl;
+        lines.erase(lines.begin() + *iit);
+        //std::cout << lines.size() << std::endl;
     }
-    std::cout << "start point x: " << x_[0] << std::endl;
 }
 
-void PointSearcher::process()
+std::vector<std::pair<double, double>> PointSearcher::process(std::vector<Line<double>>& lines)
 {
-    Problem problem;
+    std::vector<std::pair<double, double>> result_pts;
+    int cur_progress = 0;
 
-    //Here we should provide Jacobian matrix since Ceres doesn't support
-    //runtime defined size of x
-    //The "3" in template parameter is not correct here
-    CostFunction* cost_function =
-        new AutoDiffCostFunction<CostFunctor, 1, 3>(new CostFunctor{lines_, num_points_});
-    problem.AddResidualBlock(cost_function, nullptr, x_);
-    Solver::Options options;
-    options.minimizer_progress_to_stdout = true;
-    Solver::Summary summary;
-    Solve(options, &problem, &summary);
-    std::cout << summary.BriefReport() << "\n";
-    // std::cout << "x : " << initial_x << " -> " << x << "\n";
+    std::cout << num_points_ << " " << lines.size() << std::endl;
+    while ((cur_progress != num_points_) && (lines.size() > 1)) {
+        //std::cout<< "here!" << std::endl;
+        cur_line_ = lines[0];
+        double cur_line_length = cur_line_.get_length();
+        step_vec_.first = (cur_line_.stop_pt_.first - cur_line_.start_pt_.first) / cur_line_length * tolerance_;
+        step_vec_.second = (cur_line_.stop_pt_.second - cur_line_.start_pt_.second) / cur_line_length * tolerance_;
+        intersect(lines, 0);
+        build_intersection_hist(cur_line_length);
+        auto max_it = std::max_element(intersection_hist.begin(), intersection_hist.end());
+        int max_idx = max_it - intersection_hist.begin();
+        result_pts.push_back(std::make_pair(cur_line_.start_pt_.first + max_idx * step_vec_.first,
+                                            cur_line_.start_pt_.second + max_idx * step_vec_.second));
+        clean_lines(lines, max_idx);
+        cur_progress++;
+        //std::cout << lines.size() << " lines lost" << std::endl;
+    }
+    return result_pts;
 }
