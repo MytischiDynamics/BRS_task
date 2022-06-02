@@ -58,21 +58,21 @@ void Line<T>::normalize()
 }
 
 template <typename T>
-T Line<T>::calc_dist(std::pair<T, T> &pt)
+T Line<T>::calc_dist(const std::pair<T, T> &pt) const
 {
     std::cout << std::abs(a_ * pt.first + b_ * pt.second + c_) << std::endl;
     return std::abs(a_ * pt.first + b_ * pt.second + c_);
 }
 
 template <typename T>
-T Line<T>::calc_squared_dist(std::pair<T, T> &pt)
+T Line<T>::calc_squared_dist(const std::pair<T, T> &pt) const
 {
     T dist = a_ * pt.first + b_ * pt.second + c_;
     return dist * dist;
 }
 
 template <typename T>
-std::pair<T, T> Line<T>::intersect(Line<T>& other)
+std::pair<T, T> Line<T>::intersect(const Line<T>& other) const
 {
     T x_ret = 0.0;
     T y_ret = 0.0;

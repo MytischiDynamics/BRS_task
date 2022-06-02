@@ -9,7 +9,7 @@
 PointSearcher::PointSearcher(int num_pts)
 {
     num_points_ = num_pts;
-    tolerance_ = 10.0;
+    tolerance_ = 5.0;
 }
 
 //Intersect all lines in vector with line at idx
